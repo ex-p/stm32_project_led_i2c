@@ -31,3 +31,14 @@
 *.out
 *.app
 
+Debug
+Release
+VisualGDB
+*.opensdf
+*.sdf
+*.suo
+*.old
+.vs
+VisualGDBCache
+CodeDB
+
