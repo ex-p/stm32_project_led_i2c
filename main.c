@@ -20,17 +20,20 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "stdio.h"
-#include "stdlib.h"
-#include "memory.h"
-#include "stdbool.h"
-#include "string.h"
-#include "stddef.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "i2c-lcd.h"
+#include "stm32f1xx.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <memory.h>
+#include <stdbool.h>
+#include <string.h>
+
+#include "lib/controller/controller.h"
+#include "lib/core/core.h"
+#include "lib/logger/stdlogger.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -51,7 +54,6 @@
 I2C_HandleTypeDef hi2c1;
 
 /* USER CODE BEGIN PV */
-char buf[32];
 
 /* USER CODE END PV */
 
@@ -60,81 +62,20 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
-
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-struct Node
+void PrintfDataFromStruct(struct Node* node) // this is a temporary function
 {
-	struct Node* Left; // to be used later in the binary tree
-    char* Data[20];
-};
-
-void InitNode(struct Node* node)
-{
-	node->Left = NULL;
-    for(int i = 0 ; i < (sizeof(node->Data)/sizeof(node->Data[0])); ++i)
+	int count = 0;
+	while(node->Data[count] != NULL)
 	{
-		node->Data[i] = NULL;
+	  printf(node->Data[count]);
+	  ++count;
 	}
+	printf("\n");
 }
-
-char* DoItoa(int value)
-{
-	for (int i = 0; i < strlen(buf); ++i)
-	{
-		buf[i] = 0;
-	}
-	return itoa(value, buf, 10);
-}
-
-void SendMultipleDataToLcd(struct Node* node)
-{
-	int dataSize = 0;
-	int row = 0;
-	lcd_put_cur(0, 0);
-	char* sendDataBuffer;
-
-	for (int i = 0; i < (sizeof(node->Data)/sizeof(node->Data[0])); ++i)
-	{
-		if (node->Data[i] == NULL)
-		{
-		  break;
-		}
-
-		sendDataBuffer = (node->Data[i]);
-
-		if (((dataSize + strlen(sendDataBuffer)) > 16) && (row == 0))
-		{
-		  for (int j = 0; j < (16 - dataSize); ++j)
-		  {
-			  lcd_send_data(sendDataBuffer[j]);
-		  }
-
-		  row = 1;
-		  lcd_put_cur(row, 0);
-
-		  for (int j = (16 - dataSize); j < strlen(sendDataBuffer); ++j)
-		  {
-			  lcd_send_data(sendDataBuffer[j]);
-		  }
-		}
-		else
-		{
-			lcd_send_string(sendDataBuffer);
-		}
-
-		if ((dataSize == 16) && (row == 0))
-		{
-			row = 1;
-			lcd_put_cur(row, 0);
-		}
-
-		dataSize += strlen(sendDataBuffer);
-	}
-}
-
 /* USER CODE END 0 */
 
 /**
@@ -167,18 +108,12 @@ int main(void)
   MX_GPIO_Init();
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
-  lcd_init();
-  lcd_send_string("HELLO WORLD");
-  HAL_Delay(1000);
-  lcd_clear();
-  lcd_put_cur(0,0);
-
   struct Node second_screen;
-  InitNode(&second_screen);
+  DisplayInitNode(&second_screen);
   second_screen.Data[0] = (char*) "Second screen test";
 
   struct Node main_screen;
-  InitNode(&main_screen);
+  DisplayInitNode(&main_screen);
   main_screen.Left = &second_screen;
   main_screen.Data[0] = (char*) "Temperature is: ";
   main_screen.Data[1] = DoItoa(50);
@@ -186,49 +121,26 @@ int main(void)
 
   int currentScreenCounter = 0;
 
+  TLogger* logger = NewStdLogger();
+  TDisplay* display = NewI2cDisplay();
+  TController* controller = NewController(logger, display);
+
+  RunSomething(controller);
+
+  free(logger);
+  free(display);
+  free(controller);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0))
-	  {
-		  int antiBounceCounter = 0;
-
-		  while(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0))
-		  {
-			  antiBounceCounter++;
-		  }
-
-		  if(antiBounceCounter > 100)
-		  {
-			  ++currentScreenCounter;
-			  lcd_clear();
-
-			  if(currentScreenCounter > 1)
-			  {
-				  currentScreenCounter = 0;
-			  }
-		  }
-	  }
-	  switch(currentScreenCounter)
-	  {
-		  case 0:
-			  SendMultipleDataToLcd(&main_screen);
-			  break;
-
-		  case 1:
-			  SendMultipleDataToLcd(main_screen.Left);
-			  break;
-
-		  default:
-			  SendMultipleDataToLcd(&main_screen);
-	  }
-  }
-	  /* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+  }
   /* USER CODE END 3 */
 }
 
@@ -320,18 +232,18 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, LD4_Pin|LD3_Pin, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin : USER_BUTTON_Pin */
+  GPIO_InitStruct.Pin = USER_BUTTON_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(USER_BUTTON_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pins : LD4_Pin LD3_Pin */
   GPIO_InitStruct.Pin = LD4_Pin|LD3_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PA0 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 }
 
