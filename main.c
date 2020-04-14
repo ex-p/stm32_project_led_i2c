@@ -108,19 +108,6 @@ int main(void)
   MX_GPIO_Init();
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
-  struct Node second_screen;
-  DisplayInitNode(&second_screen);
-  second_screen.Data[0] = (char*) "Second screen test";
-
-  struct Node main_screen;
-  DisplayInitNode(&main_screen);
-  main_screen.Left = &second_screen;
-  main_screen.Data[0] = (char*) "Temperature is: ";
-  main_screen.Data[1] = DoItoa(50);
-  main_screen.Data[2] = (char*) " degrees";
-
-  int currentScreenCounter = 0;
-
   TLogger* logger = NewStdLogger();
   TDisplay* display = NewI2cDisplay();
   TController* controller = NewController(logger, display);
